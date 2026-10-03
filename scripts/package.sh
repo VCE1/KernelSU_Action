@@ -50,6 +50,7 @@ make_anykernel3() {
 
 	local zipname="AnyKernel3${LOCALVERSION:-}${UPLOADNAME:-}-${DEVICE}-${BUILD_TIME}.zip"
 	( cd "$AK3" && zip -r9 "${WORKSPACE}/${zipname}" . )
+	cp -f "${WORKSPACE}/${zipname}" "${AK3}/"
 	ok "AnyKernel3 package assembled and zipped: ${zipname}"
 	endgroup
 }

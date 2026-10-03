@@ -103,6 +103,12 @@ setup_clang() {
 	ok "clang ready: ${ver}"
 	export_env CLANG_PATH "${CLANG_DIR}/bin"
 	summary "| Compiler | \`${ver}\` |"
+
+	if is_true "${USE_LLVM:-false}"; then
+		if ! command -v aarch64-linux-gnu-as >/dev/null 2>&1 || ! command -v arm-linux-gnueabi-as >/dev/null 2>&1; then
+			sudo apt-get install -y --no-install-recommends binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi || true
+		fi
+	fi
 	endgroup
 }
 
