@@ -62,6 +62,16 @@ def main():
     text = makefile.read_text()
     if "-DKSU_CEPHEUS_AVTAB_POINTER_ARRAY" not in text:
         makefile.write_text(text + "\nccflags-y += -DKSU_CEPHEUS_AVTAB_POINTER_ARRAY\n")
+    # builtin uses CONFIG_KSU for manual hooks but no longer declares this
+    # conventional marker. Record the actual selected integration mode so it
+    # survives olddefconfig and can be checked in the embedded configuration.
+    kconfig = ksu / "Kconfig"
+    text = kconfig.read_text()
+    if not re.search(r"(?m)^config KSU_MANUAL_HOOK$", text):
+        kconfig.write_text(text + "\nconfig KSU_MANUAL_HOOK\n"
+                           "\tbool \"KernelSU manual source hooks\"\n"
+                           "\tdepends on KSU\n"
+                           "\tdefault n\n")
     print("Applied SukiSU builtin compatibility fixes for cepheus 4.14")
 
 
