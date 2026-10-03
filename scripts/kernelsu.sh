@@ -168,6 +168,11 @@ ksu_install() {
 	fi
 	ok "${name} installed at ${head_desc} (${head_sha})"
 
+	if [ "$variant" = "sukisu-ultra" ] && [ "$kver" = "4.14" ] &&
+		[ "${KERNEL_CONFIG##*/}" = "cepheus_defconfig" ]; then
+		python3 "$(dirname "${BASH_SOURCE[0]}")/sukisu-legacy-compat.py" "$KERNEL_DIR"
+	fi
+
 	# --- publish facts the later steps need --------------------------------
 	local count version_label
 	count=$(git -C "$ksu_dir" rev-list --count HEAD 2>/dev/null || echo 0)

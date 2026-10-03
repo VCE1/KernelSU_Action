@@ -41,7 +41,7 @@ make_anykernel3() {
 		sed -i 's/IS_SLOT_DEVICE=0;/is_slot_device=auto;/g' "${AK3}/anykernel.sh"
 	fi
 
-	if [ "${DEVICE:-}" = "cepheus" ] && ! is_true "${USE_CUSTOM_ANYKERNEL3:-false}"; then
+	if [ "${KERNEL_CONFIG##*/}" = "cepheus_defconfig" ] && ! is_true "${USE_CUSTOM_ANYKERNEL3:-false}"; then
 		# The upstream template contains sample tuna ramdisk/fstab modifications.
 		# For this profile only replace the kernel and enforce the device check.
 		cp "$(dirname "${BASH_SOURCE[0]}")/../boot/anykernel-cepheus.sh" "${AK3}/anykernel.sh"
@@ -62,6 +62,11 @@ make_anykernel3() {
 }
 
 make_boot_image() {
+	if [ "${KERNEL_CONFIG##*/}" = "cepheus_defconfig" ] &&
+		[ "${KSU_VARIANT:-}" = "sukisu-ultra" ]; then
+		make_cepheus_boot
+		return
+	fi
 	is_true "${BUILD_BOOT_IMG:-false}" || return 0
 	group "Repacking boot image"
 
@@ -88,6 +93,39 @@ make_boot_image() {
 	[ -s "${WORKSPACE}/boot.img" ] || die "boot.img was not produced"
 
 	ok "boot.img built ($(du -h "${WORKSPACE}/boot.img" | cut -f1))"
+	export_env MAKE_BOOT_IMAGE_IS_OK true
+	endgroup
+}
+
+make_cepheus_boot() {
+	group "Repacking verified cepheus PixelOS 15 boot on Actions"
+	[ "${GITHUB_ACTIONS:-false}" = "true" ] || die "cepheus delivery must be built on GitHub Actions"
+	local repo tools delivery
+	repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+	tools="${WORKSPACE}/magiskboot-tools"
+	delivery="${WORKSPACE}/delivery"
+	mkdir -p "$tools" "$delivery"
+	python3 "${repo}/scripts/test_verify_cepheus.py"
+	fetch "https://github.com/topjohnwu/Magisk/releases/download/v30.7/Magisk-v30.7.apk" "${tools}/Magisk-v30.7.apk"
+	echo "e0d32d2123532860f97123d927b1bb86c4e08e6fd8a48bfc6b5bee0afae9ebd5  ${tools}/Magisk-v30.7.apk" | sha256sum -c -
+	unzip -p "${tools}/Magisk-v30.7.apk" lib/x86_64/libmagiskboot.so > "${tools}/magiskboot"
+	chmod +x "${tools}/magiskboot"
+	echo "a18ecbd7981179494b7d281453d6c4e25b5c719e7d2ef7f6eba3c6be3043c58e  ${tools}/magiskboot" | sha256sum -c -
+	gzip -dc "${repo}/boot/cepheus-pixelos15.img.gz" > "${WORKSPACE}/cepheus-stock.img"
+	MAGISKBOOT="${tools}/magiskboot" bash "${repo}/scripts/repack-cepheus.sh" \
+		"${WORKSPACE}/cepheus-stock.img" "${BOOT_OUT}/${KERNEL_IMAGE_NAME}" "$delivery"
+	cp "${delivery}/boot-sukisu.img" "${WORKSPACE}/boot.img"
+	cp "${BOOT_OUT}/${KERNEL_IMAGE_NAME}" "$delivery/"
+	cp "${WORKSPACE}"/AnyKernel3*.zip "$delivery/"
+	cp "${KERNEL_DIR}/out/.config" "${delivery}/build.config"
+	{
+		echo "actions_run=${GITHUB_RUN_ID}"
+		echo "workflow_commit=${GITHUB_SHA}"
+		echo "kernel_commit=$(git -C "$KERNEL_DIR" rev-parse HEAD)"
+		echo "sukisu_commit=$(git -C "${KERNEL_DIR}/drivers/kernelsu" rev-parse HEAD)"
+		echo "device_boot_test=not_performed"
+	} > "${delivery}/provenance.txt"
+	(cd "$delivery" && sha256sum boot-sukisu.img Image.gz-dtb ./*.zip > SHA256SUMS)
 	export_env MAKE_BOOT_IMAGE_IS_OK true
 	endgroup
 }

@@ -231,6 +231,14 @@ jobs:
           name: boot${{ env.LOCALVERSION }}${{ env.UPLOADNAME }}-${{ env.DEVICE }}-${{ env.BUILD_TIME }}
           path: kernel_workspace/boot.img
 
+      - name: Upload verified cepheus delivery
+        if: env.MAKE_BOOT_IMAGE_IS_OK == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cepheus-SukiSU-delivery-${{ github.run_id }}
+          path: kernel_workspace/delivery/
+          if-no-files-found: warn
+
   # Publishing is a separate job so the build itself runs with a read-only
   # token; only this job gets contents:write, and only when asked for.
   release:
