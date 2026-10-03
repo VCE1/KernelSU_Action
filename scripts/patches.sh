@@ -321,15 +321,8 @@ hooks_patch_apply() {
 		fi
 	fi
 
-	# SukiSU's patch repo carries per-version hook patches too.
-	if [ "$variant" = "sukisu-ultra" ]; then
-		local dir p
-		dir=$(sukisu_patch_dir)
-		for p in "${dir}/${kver}/"*hook*.patch "${dir}/hooks/syscall_hooks.patch"; do
-			[ -f "$p" ] || continue
-			if ( cd "$KERNEL_DIR" && apply_patch "$p" 1 ); then endgroup; return 0; fi
-		done
-	fi
+	# For sukisu-ultra on 4.x non-GKI, use the bundled legacy hook script
+	# to avoid duplicate path_umount declarations in fs/namespace.c.
 
 	# Fall back to the in-repo sed script, which is what this action shipped
 	# historically and still works for the 4.9-5.4 KernelSU 0.9.x hook API.
