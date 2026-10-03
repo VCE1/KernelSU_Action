@@ -48,7 +48,9 @@ make_anykernel3() {
 	fi
 	rm -rf "${AK3}/.git" "${AK3}/.github" "${AK3}/README.md"
 
-	ok "AnyKernel3 package assembled"
+	local zipname="AnyKernel3${LOCALVERSION:-}${UPLOADNAME:-}-${DEVICE}-${BUILD_TIME}.zip"
+	( cd "$AK3" && zip -r9 "${WORKSPACE}/${zipname}" . )
+	ok "AnyKernel3 package assembled and zipped: ${zipname}"
 	endgroup
 }
 

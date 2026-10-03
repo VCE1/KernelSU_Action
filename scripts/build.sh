@@ -14,6 +14,9 @@ WORKSPACE=${WORKSPACE:-$(cd "${KERNEL_DIR}/.." && pwd)}
 ARCH=${ARCH:-arm64}
 OUT="${KERNEL_DIR}/out"
 
+KERNEL_CONFIG=${KERNEL_CONFIG#arch/${ARCH}/configs/}
+KERNEL_CONFIG=${KERNEL_CONFIG#arch/arm64/configs/}
+
 DEFCONFIG_PATH="${KERNEL_DIR}/arch/${ARCH}/configs/${KERNEL_CONFIG}"
 
 # ------------------------------------------------------------- defconfig ---

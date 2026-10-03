@@ -35,6 +35,7 @@ AOSP_CLANG_BASE="https://android.googlesource.com/platform/prebuilts/clang/host/
 # main-kernel-build-YYYY in 2023, then main-kernel-YYYY from 2025 on.
 clang_known_good() {
 	case "$1/$2" in
+		llvm-r530567/r530567 | \
 		main-kernel/r596125 | \
 		main-kernel/r547379 | \
 		main-kernel-2026/r584948c | \
