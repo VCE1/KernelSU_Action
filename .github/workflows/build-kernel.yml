@@ -165,7 +165,17 @@ jobs:
             libncurses-dev
           mkdir -p "$WORKSPACE"
 
+      - name: Cache AOSP Clang
+        if: env.USE_CUSTOM_CLANG == 'false'
+        id: clang_cache
+        uses: actions/cache@v4
+        with:
+          path: kernel_workspace/clang
+          key: aosp-clang-${{ runner.os }}-${{ env.CLANG_BRANCH }}-${{ env.CLANG_VERSION }}
+
       - name: Set up toolchain
+        env:
+          CLANG_CACHE_HIT: ${{ steps.clang_cache.outputs.cache-hit }}
         run: bash scripts/toolchain.sh
 
       - name: Fetch kernel source
@@ -187,6 +197,19 @@ jobs:
 
       - name: Build kernel
         run: bash scripts/build.sh all
+
+      # Preserve the expensive compile before optional packaging can fail.
+      - name: Preserve compiled kernel
+        if: env.CHECK_FILE_IS_OK == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-kernel-${{ github.run_id }}
+          path: |
+            kernel_workspace/android-kernel/out/arch/${{ env.ARCH }}/boot/${{ env.KERNEL_IMAGE_NAME }}
+            kernel_workspace/android-kernel/out/.config
+            kernel_workspace/android-kernel/out/System.map
+          include-hidden-files: true
+          if-no-files-found: error
 
       - name: Package artifacts
         run: bash scripts/package.sh all
@@ -238,6 +261,18 @@ jobs:
           name: cepheus-SukiSU-delivery-${{ github.run_id }}
           path: kernel_workspace/delivery/
           if-no-files-found: warn
+
+      - name: Preserve diagnostic files
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostics-${{ github.run_id }}
+          path: |
+            kernel_workspace/android-kernel/out/.config
+            kernel_workspace/android-kernel/out/System.map
+            kernel_workspace/delivery/*.json
+          include-hidden-files: true
+          if-no-files-found: ignore
 
   # Publishing is a separate job so the build itself runs with a read-only
   # token; only this job gets contents:write, and only when asked for.

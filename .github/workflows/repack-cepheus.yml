@@ -34,15 +34,24 @@ jobs:
           import json
           from pathlib import Path
           run = json.loads(Path("output/source-run.json").read_text())
-          assert run["conclusion"] == "success", "source build must succeed first"
           assert run["path"] == ".github/workflows/build-kernel.yml", "wrong workflow"
           assert run["head_branch"] == "main", "expected main branch"
           PY
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN/jobs" > output/source-jobs.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          jobs = json.loads(Path("output/source-jobs.json").read_text())["jobs"]
+          assert any(step["name"] == "Build kernel" and step["conclusion"] == "success"
+                     for job in jobs for step in job["steps"]), "kernel compilation must succeed"
+          PY
           gh run download "$SOURCE_RUN" -R "$GITHUB_REPOSITORY" \
-            -p 'Image.gz-dtb*' -D output/kernel
-          gh run download "$SOURCE_RUN" -R "$GITHUB_REPOSITORY" \
-            -p 'AnyKernel3*' -D output/anykernel
+            -p "compiled-kernel-${SOURCE_RUN}" -D output/compiled
+          mkdir -p output/kernel
+          cp output/compiled/arch/arm64/boot/Image.gz-dtb output/kernel/
           test -s output/kernel/Image.gz-dtb
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3 output/anykernel
+          cp output/kernel/Image.gz-dtb output/anykernel/
 
       - name: Set up pinned official magiskboot (not Magisk root)
         run: |
@@ -74,7 +83,7 @@ jobs:
           PY
           (cd output/anykernel && zip -qr9 \
             "$GITHUB_WORKSPACE/output/delivery/AnyKernel3-cepheus-SukiSU-Actions-${SOURCE_RUN}.zip" \
-            . -x '*.zip')
+            . -x '*.zip' '.git/*' '.github/*')
           unzip -t "output/delivery/AnyKernel3-cepheus-SukiSU-Actions-${SOURCE_RUN}.zip"
           (cd output/delivery && sha256sum boot-sukisu.img Image.gz-dtb \
             "AnyKernel3-cepheus-SukiSU-Actions-${SOURCE_RUN}.zip" > SHA256SUMS)

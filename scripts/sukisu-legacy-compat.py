@@ -18,6 +18,11 @@ def replace(path, old, new):
 def main():
     kernel = Path(sys.argv[1])
     ksu = kernel / "drivers/kernelsu"
+    # This vendor tree embeds an unrelated raphael config instead of the
+    # actual build configuration. Restore the standard upstream dependency.
+    replace(kernel / "kernel/Makefile",
+            "$(obj)/config_data.gz: arch/arm64/configs/raphael-vts_defconfig FORCE",
+            "$(obj)/config_data.gz: .config FORCE")
     if not re.search(r"struct avtab_node\s*\*\*htable;",
                      (kernel / "security/selinux/ss/avtab.h").read_text()):
         raise SystemExit("cepheus avtab must use backported pointer-array htable")

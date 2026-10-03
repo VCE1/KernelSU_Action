@@ -132,7 +132,9 @@ build_kernel() {
 	args=$(make_args)
 	if is_true "${ENABLE_CCACHE:-true}" && command -v ccache >/dev/null; then
 		cc="ccache clang"
-		export CCACHE_DIR="${CCACHE_DIR:-${WORKSPACE}/.ccache}"
+		# Use the same directory configured/restored by ccache-action. A
+		# workspace-specific override silently made its saved cache empty.
+		export CCACHE_DIR="${CCACHE_DIR:-$(ccache --get-config cache_dir)}"
 		info "ccache enabled (dir: ${CCACHE_DIR})"
 	fi
 
@@ -163,6 +165,20 @@ check_output() {
 
 	ok "kernel image: ${KERNEL_IMAGE_NAME} ($(du -h "$image" | cut -f1))"
 	export_env CHECK_FILE_IS_OK true
+	if [ "${KERNEL_CONFIG##*/}" = "cepheus_defconfig" ] &&
+		[ "${KSU_VARIANT:-}" = "sukisu-ultra" ]; then
+		local required
+		for required in CONFIG_KSU=y CONFIG_KSU_MANUAL_HOOK=y \
+			CONFIG_KSU_FEATURE_ADBROOT=y '# CONFIG_KSU_SUSFS is not set'; do
+			grep -Fxq "$required" "${OUT}/.config" || die "actual build config missing ${required}"
+		done
+		for required in kernelsu_init ksu_handle_execveat ksu_handle_vfs_read \
+			ksu_handle_faccessat ksu_handle_stat path_umount; do
+			grep -Eq "[[:space:]]${required}$" "${OUT}/System.map" \
+				|| die "linked kernel symbol missing ${required}"
+		done
+		ok "Actual build config and linked SukiSU/manual hook/path_umount symbols verified"
+	fi
 
 	if is_true "${NEED_DTBO:-false}"; then
 		[ -f "${boot}/dtbo.img" ] || die "NEED_DTBO=true but ${boot}/dtbo.img was not produced"

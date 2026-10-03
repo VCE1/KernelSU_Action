@@ -50,9 +50,13 @@ clang_known_good() {
 }
 
 setup_clang() {
-	rm -rf "$CLANG_DIR"; mkdir -p "$CLANG_DIR"
+	if [ "${CLANG_CACHE_HIT:-false}" != "true" ] || [ ! -x "${CLANG_DIR}/bin/clang" ]; then
+		rm -rf "$CLANG_DIR"; mkdir -p "$CLANG_DIR"
+	fi
 
-	if is_true "${USE_CUSTOM_CLANG:-false}"; then
+	if [ "${CLANG_CACHE_HIT:-false}" = "true" ] && [ -x "${CLANG_DIR}/bin/clang" ]; then
+		group "Restored cached AOSP Clang"
+	elif is_true "${USE_CUSTOM_CLANG:-false}"; then
 		group "Downloading custom Clang"
 		local src=${CUSTOM_CLANG_SOURCE:?CUSTOM_CLANG_SOURCE required}
 		case "$src" in
