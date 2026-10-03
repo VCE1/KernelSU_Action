@@ -1,0 +1,96 @@
+name: Repack cepheus boot
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Successful Build Kernel run ID (reuse its kernel, no compilation)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  repack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: ${{ inputs.source_run }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test verification gates
+        run: python3 scripts/test_verify_cepheus.py
+
+      - name: Download and authenticate source build
+        run: |
+          [[ "$SOURCE_RUN" =~ ^[0-9]+$ ]]
+          mkdir -p output
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > output/source-run.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          run = json.loads(Path("output/source-run.json").read_text())
+          assert run["conclusion"] == "success", "source build must succeed first"
+          assert run["path"] == ".github/workflows/build-kernel.yml", "wrong workflow"
+          assert run["head_branch"] == "main", "expected main branch"
+          PY
+          gh run download "$SOURCE_RUN" -R "$GITHUB_REPOSITORY" \
+            -p 'Image.gz-dtb*' -D output/kernel
+          gh run download "$SOURCE_RUN" -R "$GITHUB_REPOSITORY" \
+            -p 'AnyKernel3*' -D output/anykernel
+          test -s output/kernel/Image.gz-dtb
+
+      - name: Set up pinned official magiskboot (not Magisk root)
+        run: |
+          mkdir -p output/tools
+          gh release download v30.7 -R topjohnwu/Magisk \
+            -p Magisk-v30.7.apk -D output/tools
+          echo 'e0d32d2123532860f97123d927b1bb86c4e08e6fd8a48bfc6b5bee0afae9ebd5  output/tools/Magisk-v30.7.apk' | sha256sum -c -
+          unzip -p output/tools/Magisk-v30.7.apk lib/x86_64/libmagiskboot.so \
+            > output/tools/magiskboot
+          chmod +x output/tools/magiskboot
+          echo 'a18ecbd7981179494b7d281453d6c4e25b5c719e7d2ef7f6eba3c6be3043c58e  output/tools/magiskboot' | sha256sum -c -
+
+      - name: Repack and verify PixelOS 15 boot
+        run: |
+          mkdir -p output/delivery
+          gzip -dc boot/cepheus-pixelos15.img.gz > output/stock-boot.img
+          MAGISKBOOT="$PWD/output/tools/magiskboot" bash scripts/repack-cepheus.sh \
+            output/stock-boot.img output/kernel/Image.gz-dtb output/delivery
+          cp output/kernel/Image.gz-dtb output/delivery/
+          cp output/source-run.json output/delivery/
+
+      - name: Assemble cepheus-only flashable ZIP and checksums
+        run: |
+          cp boot/anykernel-cepheus.sh output/anykernel/anykernel.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          assert Path("output/anykernel/Image.gz-dtb").read_bytes() == Path(
+              "output/kernel/Image.gz-dtb").read_bytes()
+          PY
+          (cd output/anykernel && zip -qr9 \
+            "$GITHUB_WORKSPACE/output/delivery/AnyKernel3-cepheus-SukiSU-Actions-${SOURCE_RUN}.zip" \
+            . -x '*.zip')
+          unzip -t "output/delivery/AnyKernel3-cepheus-SukiSU-Actions-${SOURCE_RUN}.zip"
+          (cd output/delivery && sha256sum boot-sukisu.img Image.gz-dtb \
+            "AnyKernel3-cepheus-SukiSU-Actions-${SOURCE_RUN}.zip" > SHA256SUMS)
+          {
+            echo '### cepheus / PixelOS 15 / SukiSU-Ultra'
+            echo "Source build: ${SOURCE_RUN}"
+            echo 'Stock ramdisk, boot header, kernel and appended DTBs verified.'
+            echo 'Device boot/root test has NOT been performed.'
+            echo '```'
+            cat output/delivery/SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload verified delivery
+        uses: actions/upload-artifact@v4
+        with:
+          name: cepheus-SukiSU-delivery-${{ inputs.source_run }}
+          path: output/delivery/
+          if-no-files-found: error

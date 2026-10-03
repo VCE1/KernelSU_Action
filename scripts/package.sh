@@ -41,6 +41,12 @@ make_anykernel3() {
 		sed -i 's/IS_SLOT_DEVICE=0;/is_slot_device=auto;/g' "${AK3}/anykernel.sh"
 	fi
 
+	if [ "${DEVICE:-}" = "cepheus" ] && ! is_true "${USE_CUSTOM_ANYKERNEL3:-false}"; then
+		# The upstream template contains sample tuna ramdisk/fstab modifications.
+		# For this profile only replace the kernel and enforce the device check.
+		cp "$(dirname "${BASH_SOURCE[0]}")/../boot/anykernel-cepheus.sh" "${AK3}/anykernel.sh"
+	fi
+
 	cp "${BOOT_OUT}/${KERNEL_IMAGE_NAME}" "${AK3}/" \
 		|| die "kernel image missing at ${BOOT_OUT}/${KERNEL_IMAGE_NAME}"
 	if is_true "${CHECK_DTBO_IS_OK:-false}"; then
