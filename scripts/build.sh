@@ -38,6 +38,8 @@ prepare_defconfig() {
 
 		if is_true "${ENABLE_SUSFS:-false}"; then
 			susfs_defconfig "$DEFCONFIG_PATH"
+		else
+			kconf_disable "$DEFCONFIG_PATH" CONFIG_KSU_SUSFS
 		fi
 
 		if is_true "${ENABLE_KPM:-false}"; then
